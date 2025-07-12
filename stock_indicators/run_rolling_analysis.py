@@ -143,23 +143,18 @@ def run_rolling_analysis(ticker, spy_ticker, start_date, end_date, train_window,
         print("Could not fetch main ticker data. Exiting.")
         return
         
-    # --- 2. Define Parameter Grid ---
-    # Generate large, unique integer values for the grid
-    rsi_p = np.unique(np.linspace(5, 25, 10, dtype=int))
-    macd_f = np.unique(np.linspace(5, 40, 12, dtype=int))
-    macd_s = np.unique(np.linspace(20, 70, 12, dtype=int))
-    macd_sig = np.unique(np.linspace(5, 25, 12, dtype=int))
-    
+    # --- 2. Define Parameter Grid (Constrained for Robustness) ---
     param_grid = {
-        'rsi_period': rsi_p,
-        'macd_fast_period': macd_f,
-        'macd_slow_period': macd_s,
-        'macd_signal_period': macd_sig
+        'rsi_period': [14, 21, 28],
+        'macd_fast_period': [12, 21, 26],
+        'macd_slow_period': [34, 52, 60],
+        'macd_signal_period': [9, 12, 16]
     }
     
     # Calculate the number of valid combinations where slow > fast
-    valid_combos = sum(1 for f in macd_f for s in macd_s if s > f) * len(rsi_p) * len(macd_sig)
-    print(f"\nStarting optimization with a grid of {valid_combos} valid combinations using {num_cores} cores.")
+    valid_combos = sum(1 for f in param_grid['macd_fast_period'] for s in param_grid['macd_slow_period'] if s > f) * len(param_grid['rsi_period']) * len(param_grid['macd_signal_period'])
+    print(f"\nStarting optimization with a constrained grid of {valid_combos} valid combinations using {num_cores} cores.")
+    print("Optimization now includes stability analysis to prefer robust parameter sets.")
     
     # --- 3. Run Rolling Optimizer ---
     rolling_optimizer = RollingOptimizer(
