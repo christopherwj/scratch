@@ -1,0 +1,16 @@
+pandas
+numpy
+matplotlib
+seaborn
+scikit-learn
+ta
+plotly
+dash
+dash-bootstrap-components
+schedule
+python-dotenv
+requests
+fastapi
+uvicorn
+sqlalchemy
+aiohttp 
