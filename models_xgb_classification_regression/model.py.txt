@@ -1,0 +1,96 @@
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import xgboost as xgb
+from ta.momentum import RSIIndicator
+from ta.trend import MACD
+from ta.volatility import BollingerBands, AverageTrueRange
+from ta.volume import OnBalanceVolumeIndicator
+
+# ------------------------------
+# 1. Load & Prepare Data
+# ------------------------------
+df = yf.download('AAPL', start='2010-01-01', end='2024-12-31')
+
+# Technical indicators
+df['RSI'] = RSIIndicator(close=df['Close'].squeeze(), window=14).rsi()
+df['MACD'] = MACD(close=df['Close'].squeeze()).macd_diff()
+df['BB_width'] = BollingerBands(close=df['Close'].squeeze(), window=20, window_dev=2).bollinger_wband()
+df['ATR'] = AverageTrueRange(high=df['High'].squeeze(), low=df['Low'].squeeze(), close=df['Close'].squeeze(), window=14).average_true_range()
+df['OBV'] = OnBalanceVolumeIndicator(close=df['Close'].squeeze(), volume=df['Volume'].squeeze()).on_balance_volume()
+
+# Lagged features
+df['Close_Lag1'] = df['Close'].shift(1)
+df['Return'] = df['Close'].pct_change()
+df['Future_Return'] = df['Close'].shift(-5) / df['Close'] - 1  # 5-day forward return
+df['Target'] = (df['Future_Return'] > 0).astype(int)
+
+df.dropna(inplace=True)
+
+# ------------------------------
+# 2. Rolling Backtest
+# ------------------------------
+feature_cols = ['RSI', 'MACD', 'BB_width', 'ATR', 'OBV', 'Return']
+start_train_size = 200
+rolling_window = 5
+results = []
+
+for start in range(start_train_size, len(df) - rolling_window):
+    train_df = df.iloc[:start]
+    test_df = df.iloc[start:start + rolling_window]
+
+    X_train = train_df[feature_cols]
+    y_train_cls = train_df['Target']
+    y_train_reg = train_df['Future_Return']
+    X_test = test_df[feature_cols]
+    y_test_cls = test_df['Target']
+    y_test_reg = test_df['Future_Return']
+
+    if X_train.empty or y_train_cls.empty or X_test.empty:
+        continue
+
+    # Classification: Direction
+    clf = xgb.XGBClassifier(n_estimators=100, max_depth=4, learning_rate=0.01,
+                            subsample=0.8, colsample_bytree=0.8,
+                            use_label_encoder=False, eval_metric='logloss',
+                            verbosity=0, seed=42)
+    clf.fit(X_train, y_train_cls)
+    y_pred_cls = clf.predict(X_test)
+    y_proba_cls = clf.predict_proba(X_test)[:, 1]
+
+    # Regression: Return magnitude
+    reg = xgb.XGBRegressor(n_estimators=100, max_depth=4, learning_rate=0.01,
+                           subsample=0.8, colsample_bytree=0.8, verbosity=0, seed=42)
+    reg.fit(X_train, y_train_reg)
+    y_pred_reg = reg.predict(X_test)
+
+    for i in range(rolling_window):
+        results.append({
+            'Date': test_df.index[i],
+            'Actual_Direction': int(y_test_cls.iloc[i]),
+            'Predicted_Direction': int(y_pred_cls[i]),
+            'Confidence': float(y_proba_cls[i]),
+            'Actual_Return': float(y_test_reg.iloc[i]),
+            'Predicted_Return': float(y_pred_reg[i]),
+            'Correct': int(y_pred_cls[i] == y_test_cls.iloc[i])
+        })
+
+# ------------------------------
+# 3. Results & Plot
+# ------------------------------
+if not results:
+    print("No results collected — try reducing start_train_size or checking feature prep.")
+else:
+    results_df = pd.DataFrame(results)
+    results_df.set_index('Date', inplace=True)
+    results_df['Rolling_5D_Accuracy'] = results_df['Correct'].rolling(window=5).mean()
+
+    print("Overall Accuracy:", results_df['Correct'].mean())
+    print(results_df[['Predicted_Direction', 'Confidence', 'Predicted_Return']].tail(10))
+
+    # Plot
+    results_df['Rolling_5D_Accuracy'].plot(figsize=(12, 4), title="Rolling 5-Day Prediction Accuracy")
+    plt.ylabel("Accuracy")
+    plt.grid(True)
+    plt.show()
