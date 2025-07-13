@@ -527,15 +527,36 @@ class VCPDetector:
         Returns:
             BreakoutSignal object
         """
-        # Calculate stop loss and profit target
+        # Calculate stop loss and profit target based on actual market levels
         if signal_type == 'breakout':
+            # For breakouts: stop loss below support, profit target at next resistance
             stop_loss = vcp_pattern.support_level * 0.95  # 5% below support
-            profit_target = price + (price - stop_loss) * 2  # 2:1 risk-reward
+            
+            # Find next resistance level (look for swing highs after pattern)
+            next_resistance = self._find_next_resistance_level(df, idx, price)
+            if next_resistance and next_resistance > price:
+                profit_target = next_resistance
+            else:
+                # Fallback: use 1.5x the pattern's height
+                pattern_height = vcp_pattern.resistance_level - vcp_pattern.support_level
+                profit_target = price + pattern_height * 1.5
         else:  # breakdown
+            # For breakdowns: stop loss above resistance, profit target at next support
             stop_loss = vcp_pattern.resistance_level * 1.05  # 5% above resistance
-            profit_target = price - (stop_loss - price) * 2  # 2:1 risk-reward
+            
+            # Find next support level (look for swing lows after pattern)
+            next_support = self._find_next_support_level(df, idx, price)
+            if next_support and next_support < price:
+                profit_target = next_support
+            else:
+                # Fallback: use 1.5x the pattern's height
+                pattern_height = vcp_pattern.resistance_level - vcp_pattern.support_level
+                profit_target = price - pattern_height * 1.5
         
-        risk_reward = abs(profit_target - price) / abs(price - stop_loss)
+        # Calculate actual risk/reward ratio
+        risk = abs(price - stop_loss)
+        reward = abs(profit_target - price)
+        risk_reward = reward / risk if risk > 0 else 1.0
         
         # Calculate confidence based on pattern strength and volume
         confidence = vcp_pattern.pattern_strength
@@ -564,4 +585,72 @@ class VCPDetector:
             stop_loss=stop_loss,
             profit_target=profit_target,
             risk_reward_ratio=risk_reward
-        ) 
+        )
+    
+    def _find_next_resistance_level(self, df: pd.DataFrame, current_idx: int, current_price: float) -> Optional[float]:
+        """
+        Find the next resistance level after the current position
+        
+        Args:
+            df: DataFrame with price data
+            current_idx: Current position index
+            current_price: Current price
+            
+        Returns:
+            Next resistance level or None if not found
+        """
+        try:
+            # Look ahead up to 50 bars for swing highs
+            look_ahead = min(50, len(df) - current_idx - 1)
+            if look_ahead <= 0:
+                return None
+            
+            future_data = df.iloc[current_idx + 1:current_idx + 1 + look_ahead]
+            
+            # Find swing highs in the future data
+            swing_highs = []
+            for i in range(1, len(future_data) - 1):
+                if (future_data['high'].iloc[i] > future_data['high'].iloc[i-1] and 
+                    future_data['high'].iloc[i] > future_data['high'].iloc[i+1]):
+                    swing_highs.append(future_data['high'].iloc[i])
+            
+            # Return the lowest swing high above current price
+            valid_resistances = [h for h in swing_highs if h > current_price]
+            return min(valid_resistances) if valid_resistances else None
+            
+        except Exception:
+            return None
+    
+    def _find_next_support_level(self, df: pd.DataFrame, current_idx: int, current_price: float) -> Optional[float]:
+        """
+        Find the next support level after the current position
+        
+        Args:
+            df: DataFrame with price data
+            current_idx: Current position index
+            current_price: Current price
+            
+        Returns:
+            Next support level or None if not found
+        """
+        try:
+            # Look ahead up to 50 bars for swing lows
+            look_ahead = min(50, len(df) - current_idx - 1)
+            if look_ahead <= 0:
+                return None
+            
+            future_data = df.iloc[current_idx + 1:current_idx + 1 + look_ahead]
+            
+            # Find swing lows in the future data
+            swing_lows = []
+            for i in range(1, len(future_data) - 1):
+                if (future_data['low'].iloc[i] < future_data['low'].iloc[i-1] and 
+                    future_data['low'].iloc[i] < future_data['low'].iloc[i+1]):
+                    swing_lows.append(future_data['low'].iloc[i])
+            
+            # Return the highest swing low below current price
+            valid_supports = [l for l in swing_lows if l < current_price]
+            return max(valid_supports) if valid_supports else None
+            
+        except Exception:
+            return None 
