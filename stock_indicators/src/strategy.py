@@ -1,10 +1,19 @@
 import pandas as pd
 from src.indicators import calculate_rsi, calculate_macd
 
+# Try to import GPU-accelerated indicators
+try:
+    from src.indicators_gpu import calculate_rsi as calculate_rsi_gpu, calculate_macd as calculate_macd_gpu
+    GPU_AVAILABLE = True
+    print("GPU acceleration enabled for indicators")
+except ImportError:
+    GPU_AVAILABLE = False
+    print("GPU acceleration not available, using CPU indicators")
+
 class Strategy:
     def __init__(self, data: pd.DataFrame, rsi_period: int = 14, macd_fast_period: int = 12, macd_slow_period: int = 26, macd_signal_period: int = 9):
         """
-        Initializes the Strategy class using crossover logic.
+        Initializes the Strategy class using crossover logic with GPU acceleration when available.
         """
         self.data = data.copy()
         self.rsi_period = int(rsi_period)
@@ -16,12 +25,28 @@ class Strategy:
     def generate_signals(self) -> pd.DataFrame:
         """
         Generates buy and sell signals based on MACD crossover confirmed by RSI.
+        Uses GPU acceleration when available.
         """
-        # Calculate Indicators
-        self.data['rsi'] = calculate_rsi(self.data['Close'], self.rsi_period)
-        macd_line, signal_line, _ = calculate_macd(self.data['Close'], self.macd_fast_period, self.macd_slow_period, self.macd_signal_period)
-        self.data['macd_line'] = macd_line
-        self.data['macd_signal'] = signal_line
+        # Calculate Indicators with GPU acceleration if available
+        if GPU_AVAILABLE:
+            try:
+                self.data['rsi'] = calculate_rsi_gpu(self.data['Close'], self.rsi_period)
+                macd_line, signal_line, _ = calculate_macd_gpu(self.data['Close'], self.macd_fast_period, self.macd_slow_period, self.macd_signal_period)
+                self.data['macd_line'] = macd_line
+                self.data['macd_signal'] = signal_line
+            except Exception as e:
+                print(f"GPU indicator calculation failed, falling back to CPU: {e}")
+                # Fallback to CPU
+                self.data['rsi'] = calculate_rsi(self.data['Close'], self.rsi_period)
+                macd_line, signal_line, _ = calculate_macd(self.data['Close'], self.macd_fast_period, self.macd_slow_period, self.macd_signal_period)
+                self.data['macd_line'] = macd_line
+                self.data['macd_signal'] = signal_line
+        else:
+            # Use CPU indicators
+            self.data['rsi'] = calculate_rsi(self.data['Close'], self.rsi_period)
+            macd_line, signal_line, _ = calculate_macd(self.data['Close'], self.macd_fast_period, self.macd_slow_period, self.macd_signal_period)
+            self.data['macd_line'] = macd_line
+            self.data['macd_signal'] = signal_line
 
         self.data.dropna(inplace=True)
 
