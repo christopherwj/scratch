@@ -326,12 +326,12 @@ class MLBacktester:
 
 if __name__ == '__main__':
     # Test the ML backtester
-    from src.data_loader import fetch_data
+    from src.data_loader import fetch_data, load_aapl_split_adjusted
     
     print("Testing ML Backtester...")
     
     # Load data
-    data = fetch_data('AAPL', '2018-01-01', '2023-12-31')
+    data = load_aapl_split_adjusted()
     if data is not None:
         # Split data for training and testing
         split_date = '2022-01-01'

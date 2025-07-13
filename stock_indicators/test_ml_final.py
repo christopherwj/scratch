@@ -6,49 +6,29 @@ from sklearn.metrics import accuracy_score
 import warnings
 warnings.filterwarnings('ignore')
 
-def create_realistic_market_data():
-    """Create realistic synthetic market data for demonstration."""
-    np.random.seed(42)
+def load_real_aapl_data():
+    """Load real AAPL data from the data directory."""
+    from pathlib import Path
     
-    # Create business days only
-    dates = pd.date_range('2018-01-01', '2023-12-31', freq='B')  # Business days
-    n_days = len(dates)
+    # Load the AAPL data file
+    data_file = Path('data/aapl_split_adjusted.csv')
     
-    # Generate realistic price movements with trends, volatility clustering, and mean reversion
-    returns = []
-    volatility = 0.02  # Base volatility
+    if not data_file.exists():
+        print(f"❌ AAPL data file not found at {data_file}")
+        return None
     
-    for i in range(n_days):
-        # Volatility clustering
-        volatility = 0.95 * volatility + 0.05 * 0.02 + 0.1 * abs(np.random.normal(0, 0.01))
+    try:
+        # Load the data with proper date parsing
+        data = pd.read_csv(data_file, index_col='Date', parse_dates=True)
+        print(f"✅ Loaded real AAPL data from {data_file}")
+        print(f"   Data shape: {data.shape}")
+        print(f"   Date range: {data.index.min()} to {data.index.max()}")
         
-        # Market regime changes
-        if i % 500 == 0:  # Change regime every ~2 years
-            trend = np.random.choice([-0.0002, 0.0005, 0.001])  # Bear, neutral, bull
-        else:
-            trend = 0.0005  # Default slight upward trend
+        return data
         
-        # Daily return with mean reversion
-        if i > 0:
-            mean_reversion = -0.1 * returns[i-1] if abs(returns[i-1]) > 0.05 else 0
-        else:
-            mean_reversion = 0
-            
-        daily_return = trend + mean_reversion + np.random.normal(0, volatility)
-        returns.append(daily_return)
-    
-    # Convert to prices
-    prices = 150 * np.exp(np.cumsum(returns))
-    
-    # Create OHLCV data
-    data = pd.DataFrame(index=dates)
-    data['Close'] = prices
-    data['Open'] = data['Close'].shift(1) * (1 + np.random.normal(0, 0.002, n_days))
-    data['High'] = np.maximum(data['Open'], data['Close']) * (1 + np.abs(np.random.normal(0, 0.005, n_days)))
-    data['Low'] = np.minimum(data['Open'], data['Close']) * (1 - np.abs(np.random.normal(0, 0.005, n_days)))
-    data['Volume'] = np.random.lognormal(15, 0.2, n_days)
-    
-    return data.fillna(method='ffill').dropna()
+    except Exception as e:
+        print(f"❌ Error loading AAPL data: {e}")
+        return None
 
 def engineer_ml_features(data):
     """Engineer comprehensive features for ML model."""
@@ -157,11 +137,13 @@ def run_ml_trading_demo():
     print("🎯 Using RTX 3090 Ti GPU Acceleration with XGBoost")
     print("="*80)
     
-    # Generate realistic market data
-    print("\n1. 📊 Generating realistic market data...")
-    data = create_realistic_market_data()
-    print(f"   Generated {len(data):,} trading days")
-    print(f"   Period: {data.index.min().date()} to {data.index.max().date()}")
+    # Load real AAPL data
+    print("\n1. 📊 Loading real AAPL data...")
+    data = load_real_aapl_data()
+    if data is None:
+        print("❌ Failed to load AAPL data. Exiting.")
+        return
+    print(f"   Loaded {len(data):,} trading days")
     print(f"   Price range: ${data['Close'].min():.2f} - ${data['Close'].max():.2f}")
     
     # Feature engineering

@@ -3,7 +3,7 @@ import numpy as np
 import warnings
 warnings.filterwarnings('ignore')
 
-from src.data_loader import fetch_data
+from src.data_loader import fetch_data, load_aapl_split_adjusted
 from src.ml_backtester import MLBacktester
 
 def run_ml_vs_classical_analysis():
@@ -18,7 +18,7 @@ def run_ml_vs_classical_analysis():
     
     # Load data
     print("\n1. Loading AAPL data...")
-    data = fetch_data('AAPL', '2018-01-01', '2023-12-31')
+    data = load_aapl_split_adjusted()
     if data is None:
         print("Failed to load data. Exiting.")
         return

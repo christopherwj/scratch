@@ -134,9 +134,9 @@ class FeatureEngineer:
 
 if __name__ == '__main__':
     # Test feature engineering
-    from src.data_loader import fetch_data
+    from src.data_loader import fetch_data, load_aapl_split_adjusted
     
-    data = fetch_data('AAPL', '2020-01-01', '2023-12-31')
+    data = load_aapl_split_adjusted()
     if data is not None:
         engineer = FeatureEngineer()
         features_df = engineer.create_features(data)

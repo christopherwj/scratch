@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from src.strategy import Strategy
 from src.backtester import Backtester
-from src.data_loader import fetch_data
+from src.data_loader import fetch_data, load_aapl_split_adjusted
 from src.indicators import calculate_rsi as cpu_rsi, calculate_macd as cpu_macd
 try:
     from src.indicators_gpu import calculate_rsi as gpu_rsi, calculate_macd as gpu_macd
@@ -12,7 +12,9 @@ except ImportError:
 
 def debug_signals():
     print("=== DEBUGGING SIGNAL GENERATION ===")
-    data = fetch_data('AAPL', '2020-01-01', '2020-12-31')
+    data = load_aapl_split_adjusted()
+    # Filter to 2020 data for debugging
+    data = data[data.index.year == 2020]
     if data is None:
         print("Could not fetch data")
         return
