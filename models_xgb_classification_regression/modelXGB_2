@@ -1,0 +1,152 @@
+import pandas as pd
+import numpy as np
+import yfinance as yf
+import ta
+from sklearn.model_selection import TimeSeriesSplit, GridSearchCV
+from sklearn.metrics import mean_squared_error, r2_score
+import xgboost as xgb
+import os 
+# 1. Download data
+# === 1. Load data from CSV or download and save ===
+csv_path = "AAPL_2022_2024.csv"
+
+if not os.path.exists(csv_path):
+    import yfinance as yf
+    df = yf.download('AAPL', start='2022-01-01', end='2024-01-01', auto_adjust=True)
+    df.to_csv(csv_path)
+    print(f"Downloaded and saved CSV to: {csv_path}")
+else:
+    df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
+    print(f"Loaded data from existing CSV: {csv_path}")
+# 2. Feature engineering
+
+# Returns
+df['Return'] = df['Close'].pct_change()
+
+# Lag features
+for lag in range(1, 4):
+    df[f'Lag{lag}'] = df['Return'].shift(lag)
+
+# Moving averages and volatility
+df['MA_5'] = df['Close'].rolling(window=5).mean()
+df['Volatility_5'] = df['Close'].rolling(window=5).std()
+
+# Volume indicators
+df['Volume_Change'] = df['Volume'].pct_change()
+df['OBV'] = ta.volume.OnBalanceVolumeIndicator(
+    df['Close'].squeeze(),  # convert to 1D if needed
+    df['Volume'].squeeze()  # convert to 1D if needed
+).on_balance_volume()
+# Momentum and trend indicators
+df['RSI_14'] = ta.momentum.RSIIndicator(df['Close'].squeeze(), window=14).rsi()
+
+macd = ta.trend.MACD(df['Close'].squeeze())
+df['MACD'] = macd.macd().squeeze()  # <- make sure it's 1D
+df['MACD_signal'] = macd.macd_signal().squeeze()
+adx_indicator = ta.trend.ADXIndicator(df['High'].squeeze(), df['Low'].squeeze(), df['Close'].squeeze())
+df['ADX'] = adx_indicator.adx().squeeze()  # make sure it's 1D
+
+# Bollinger Bands
+bollinger = ta.volatility.BollingerBands(df['Close'].squeeze())
+df['Bollinger_High'] = bollinger.bollinger_hband().squeeze()
+df['Bollinger_Low'] = bollinger.bollinger_lband().squeeze()
+
+# Calendar features
+df['DayOfWeek'] = df.index.dayofweek
+df['Month'] = df.index.month
+
+# Target: next day return
+df['Target'] = df['Return'].shift(-1)
+
+# Drop NaNs
+df.dropna(inplace=True)
+
+# 3. Define features and target
+features = [
+    'Lag1', 'Lag2', 'Lag3', 'MA_5', 'Volatility_5', 'Volume_Change', 'OBV',
+    'RSI_14', 'MACD', 'MACD_signal', 'ADX', 'Bollinger_High', 'Bollinger_Low',
+    'DayOfWeek', 'Month'
+]
+X = df[features]
+y = df['Target']
+
+# 4. Train-test split (70% train, 30% test)
+split_index = int(len(df)*0.7)
+X_train, X_test = X.iloc[:split_index], X.iloc[split_index:]
+y_train, y_test = y.iloc[:split_index], y.iloc[split_index:]
+
+# 5. Hyperparameter tuning with GridSearchCV on sklearn API
+param_grid = {
+    'max_depth': [3, 5, 7],
+    'min_child_weight': [1, 3, 5],
+    'subsample': [0.7, 0.8, 1.0],
+    'colsample_bytree': [0.7, 0.8, 1.0],
+    'learning_rate': [0.01, 0.05, 0.1],
+    'n_estimators': [100, 200]
+}
+
+xgb_model = xgb.XGBRegressor(random_state=42, objective='reg:squarederror', tree_method='hist')
+
+grid_search = GridSearchCV(estimator=xgb_model, param_grid=param_grid,
+                           scoring='neg_mean_squared_error', cv=5, verbose=2, n_jobs=-1)
+
+grid_search.fit(X_train, y_train)
+
+print("Best params:", grid_search.best_params_)
+
+best_params = grid_search.best_params_
+
+# 6. Further split training into train + validation for early stopping (80/20 split)
+val_split = int(len(X_train)*0.8)
+X_train_final, X_val = X_train.iloc[:val_split], X_train.iloc[val_split:]
+y_train_final, y_val = y_train.iloc[:val_split], y_train.iloc[val_split:]
+
+# 7. Prepare DMatrix for native xgboost training API
+dtrain = xgb.DMatrix(X_train_final, label=y_train_final)
+dval = xgb.DMatrix(X_val, label=y_val)
+dtest = xgb.DMatrix(X_test)
+
+# 8. Setup parameters for native API (add fixed parameters)
+params = {
+    'objective': 'reg:squarederror',
+    'eval_metric': 'rmse',
+    'max_depth': best_params['max_depth'],
+    'learning_rate': best_params['learning_rate'],
+    'subsample': best_params['subsample'],
+    'colsample_bytree': best_params['colsample_bytree'],
+    'min_child_weight': best_params['min_child_weight'],
+    'tree_method': 'hist',
+    'seed': 42
+}
+
+evals = [(dval, 'eval'), (dtrain, 'train')]
+
+# 9. Train with early stopping
+bst = xgb.train(
+    params=params,
+    dtrain=dtrain,
+    num_boost_round=best_params['n_estimators'],
+    evals=evals,
+    early_stopping_rounds=20,
+    verbose_eval=True
+)
+
+# 10. Predict and evaluate on test set
+y_pred = bst.predict(dtest)
+
+rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+r2 = r2_score(y_test, y_pred)
+
+print(f"Test RMSE: {rmse:.6f}")
+print(f"Test R2 Score: {r2:.4f}")
+
+# 11. Calculate simple confidence metric as 1 - abs(error) clipped to [0,1]
+conf = 1 - np.minimum(np.abs(y_test - y_pred), 1)
+
+results = pd.DataFrame({
+    'Actual_Return': y_test,
+    'Predicted_Return': y_pred,
+    'Confidence': conf
+})
+
+print(results.sort_values(by='Confidence', ascending=False).head(10))
