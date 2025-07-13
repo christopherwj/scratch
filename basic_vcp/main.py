@@ -328,7 +328,7 @@ def main():
     print(f"Found {len(available_tickers)} stock data files")
     
     # Scan stocks (use first 50 for demo)
-    demo_tickers = available_tickers[:10]
+    demo_tickers = available_tickers[:1000]
     print(f"Scanning {len(demo_tickers)} stocks for VCP patterns...")
     
     # Run scan

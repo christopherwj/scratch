@@ -12,23 +12,23 @@ class Config:
     MIN_DATA_POINTS = 252  # Minimum data points required (1 year)
     
     # VCP Pattern settings
-    VCP_MIN_CONSOLIDATION_DAYS = 10# Minimum days for consolidation
-    VCP_MAX_CONSOLIDATION_DAYS = 60# Maximum days for consolidation
-    VOLATILITY_CONTRACTION_THRESHOLD = 0.5# BB width contraction threshold
-    VOLUME_DECLINE_THRESHOLD = 0.2# Volume decline threshold during consolidation
+    VCP_MIN_CONSOLIDATION_DAYS = 10  # Minimum days for consolidation
+    VCP_MAX_CONSOLIDATION_DAYS = 60 # Maximum days for consolidation
+    VOLATILITY_CONTRACTION_THRESHOLD = 0.5  # BB width contraction threshold
+    VOLUME_DECLINE_THRESHOLD = 0.2  # Volume decline threshold during consolidation
     
     # Swing point settings
-    SWING_POINT_LOOKBACK = 10# Days to look back for swing points
-    SWING_POINT_THRESHOLD = 0.02# Minimum swing point threshold (2%)
+    SWING_POINT_LOOKBACK = 10  # Days to look back for swing points
+    SWING_POINT_THRESHOLD = 0.02  # Minimum swing point threshold (2%)
     
     # Breakout settings
     BREAKOUT_CONFIRMATION_DAYS = 3  # Days to confirm breakout
-    BREAKOUT_VOLUME_MULTIPLIER = 1# Volume multiplier for breakout confirmation
-    BREAKOUT_PERCENTAGE = 0.03# Percentage above resistance for breakout
+    BREAKOUT_VOLUME_MULTIPLIER = 1  # Volume multiplier for breakout confirmation
+    BREAKOUT_PERCENTAGE = 0.03  # Percentage above resistance for breakout
     
     # Risk management
-    STOP_LOSS_PERCENTAGE = 0.05# 5% stop loss
-    PROFIT_TARGET_MULTIPLIER = 2# 2:1 risk-reward ratio
+    STOP_LOSS_PERCENTAGE = 0.05  # 5% stop loss
+    PROFIT_TARGET_MULTIPLIER = 2.0  # 2:1 risk-reward ratio
     MAX_POSITION_SIZE = 0.02  # 2% of portfolio per trade
     
     # Technical indicators

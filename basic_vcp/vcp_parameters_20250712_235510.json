@@ -1,0 +1,13 @@
+{
+  "min_consolidation_days": 10,
+  "max_consolidation_days": 60,
+  "volatility_contraction_threshold": 0.5,
+  "volume_decline_threshold": 0.2,
+  "breakout_percentage": 0.03,
+  "breakout_volume_multiplier": 1,
+  "bollinger_period": 20,
+  "bollinger_std": 2,
+  "rsi_period": 14,
+  "stop_loss_percentage": 0.04,
+  "profit_target_multiplier": 2
+}
