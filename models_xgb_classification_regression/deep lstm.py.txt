@@ -1,0 +1,100 @@
+import yfinance as yf
+import pandas as pd
+import numpy as np
+from ta.momentum import RSIIndicator
+from ta.trend import MACD
+from ta.volatility import BollingerBands, AverageTrueRange
+from sklearn.model_selection import train_test_split
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense, Dropout, Bidirectional
+import matplotlib.pyplot as plt
+
+# Download & preprocess data
+tickers = ['BTC-USD', 'ETH-USD', 'ADA-USD']
+data = {}
+for ticker in tickers:
+    df = yf.download(ticker, period='7d', interval='5m', progress=False).dropna()
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    df = df.resample('5min').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'}).dropna()
+    # Add indicators
+    df['log_return'] = np.log(df['Close'] / df['Close'].shift(1))
+    df['rsi'] = RSIIndicator(close=df['Close'], window=14, fillna=True).rsi()
+    macd = MACD(close=df['Close'], window_slow=26, window_fast=12, window_sign=9, fillna=True)
+    df['macd_hist'] = macd.macd_diff()
+    bb = BollingerBands(close=df['Close'], window=20, window_dev=2, fillna=True)
+    df['bb_width'] = bb.bollinger_wband()
+    atr = AverageTrueRange(high=df['High'], low=df['Low'], close=df['Close'], window=14, fillna=True)
+    df['atr'] = atr.average_true_range()
+    df['target'] = (df['Close'].shift(-1) > df['Close']).astype(int)
+    df.dropna(inplace=True)
+    data[ticker] = df
+
+# Prepare windows
+window_size = 30
+X_list, y_list = [], []
+for df in data.values():
+    features = df[['log_return', 'rsi', 'macd_hist', 'bb_width', 'atr']].values
+    targets = df['target'].values
+    for i in range(len(df) - window_size):
+        X_list.append(features[i:i+window_size])
+        y_list.append(targets[i + window_size - 1])
+X = np.array(X_list)
+y = np.array(y_list)
+
+# Train/test split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=True, random_state=42)
+print(f"Samples: {len(X)}, Up/down ratio: {np.bincount(y)}")
+print(f"Train: {len(X_train)} samples, Test: {len(X_test)} samples")
+
+# Improved model: Bidirectional LSTM + more Dropout + learning rate schedule
+model = Sequential([
+    tf.keras.Input(shape=(window_size, X.shape[2])),
+    Bidirectional(LSTM(64, return_sequences=True)),
+    Dropout(0.3),
+    Bidirectional(LSTM(32)),
+    Dropout(0.3),
+    Dense(32, activation='relu'),
+    Dropout(0.3),
+    Dense(1, activation='sigmoid')
+])
+model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3), loss='binary_crossentropy', metrics=['accuracy'])
+
+# Learning rate scheduler callback
+def lr_schedule(epoch, lr):
+    if epoch > 0 and epoch % 10 == 0:
+        return lr * 0.5
+    return lr
+lr_callback = tf.keras.callbacks.LearningRateScheduler(lr_schedule)
+
+# Early stopping
+early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=7, restore_best_weights=True)
+
+history = model.fit(
+    X_train, y_train,
+    epochs=50,
+    batch_size=128,
+    validation_split=0.2,
+    callbacks=[early_stop, lr_callback],
+    verbose=2
+)
+
+# Evaluate
+loss, acc = model.evaluate(X_test, y_test)
+print(f"\n🧪 Test Accuracy: {acc:.4f}")
+
+# Plot
+plt.figure(figsize=(12, 4))
+plt.subplot(1, 2, 1)
+plt.plot(history.history['loss'], label='Loss')
+plt.plot(history.history['val_loss'], label='Val Loss')
+plt.legend()
+plt.title('Loss')
+
+plt.subplot(1, 2, 2)
+plt.plot(history.history['accuracy'], label='Accuracy')
+plt.plot(history.history['val_accuracy'], label='Val Accuracy')
+plt.legend()
+plt.title('Accuracy')
+plt.show()
