@@ -7,8 +7,8 @@ import seaborn as sns
 from itertools import product
 
 # --- Settings ---
-ticker = 'TSLA'
-period = '10y'  # keep long enough for data
+ticker = 'PLTR'
+period = '2y'  # keep long enough for data
 interval = '1d'
 min_trades_required = 1  # accept results with at least 1 trade
 log_file = f"{ticker}_vcp_param_log.csv"
