@@ -4,8 +4,7 @@ struct TreeNode {
     TreeNode* right;
 }
 
-//let's recursively count the amount of nodes in the tree
-
+//let's recursively count the amount of nodes in the tree   
 
 int countNodes(TreeNode* root) {
     if(root == nullptr) 
@@ -26,3 +25,18 @@ void preorderPrint(TreeNode* root) {
     }
 }
 
+void postorderPrint(TreeNode* root) {
+    if (root != nullptr) {
+        postorderPrint(root->left);
+        postorderPrint(root->right);
+        cout << root->item << " ";
+    }
+}
+
+void inorderPrint(TreeNode* root) {
+    if (root != nullptr) {
+        inorderPrint(root->left);
+        cout << root->item << " ";
+        inorderPrint(root->right);
+    }
+}
