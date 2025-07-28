@@ -2,7 +2,7 @@ struct TreeNode {
     int item;
     TreeNode* left;
     TreeNode* right;
-}
+};
 
 //let's recursively count the amount of nodes in the tree   
 
